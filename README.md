@@ -134,6 +134,9 @@ This command runs `n8n-node dev` which:
 You can now test your node in n8n workflows!
 
 > [!NOTE]
+> This repository automatically patches `@n8n/node-cli` during `npm install` and before `npm run dev` to pin the local n8n runtime to `n8n@2.15.0`. This works around the current upstream dev-mode bug without requiring a manual edit inside `node_modules`.
+
+> [!NOTE]
 > Learn more about CLI commands in the [@n8n/node-cli documentation](https://www.npmjs.com/package/@n8n/node-cli).
 
 ### 7. Lint Your Code

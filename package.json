@@ -1,11 +1,14 @@
 {
-	"name": "n8n-nodes-<...>",
+	"name": "n8n-nodes-copilot-agent",
 	"version": "0.1.0",
-	"description": "",
+	"description": "n8n community node for GitHub Copilot via the @github/copilot-sdk",
 	"license": "MIT",
 	"homepage": "",
 	"keywords": [
-		"n8n-community-node-package"
+		"n8n-community-node-package",
+		"github",
+		"copilot",
+		"ai"
 	],
 	"author": {
 		"name": "",
@@ -13,17 +16,22 @@
 	},
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/<...>/n8n-nodes-<...>.git"
+		"url": "https://github.com/yashodhah/copilot-agent.git"
 	},
 	"scripts": {
 		"build": "n8n-node build",
 		"build:watch": "tsc --watch",
-		"dev": "n8n-node dev",
+		"dev": "n8n-node dev --custom-user-folder $HOME/.n8n-node-cli-n8n-nodes-my-app",
+		"dev:external": "n8n-node dev --external-n8n --custom-user-folder $HOME/.n8n-node-cli-n8n-nodes-my-app",
 		"lint": "n8n-node lint",
 		"lint:fix": "n8n-node lint --fix",
+		"predev": "node scripts/postinstall.js",
+		"predev:external": "node scripts/postinstall.js",
+		"postinstall": "node scripts/postinstall.js",
 		"release": "n8n-node release",
 		"prepublishOnly": "n8n-node prerelease"
 	},
+	"main": "dist/index.js",
 	"files": [
 		"dist"
 	],
@@ -31,13 +39,14 @@
 		"n8nNodesApiVersion": 1,
 		"strict": true,
 		"credentials": [
-			"dist/credentials/GithubIssuesApi.credentials.js",
-			"dist/credentials/GithubIssuesOAuth2Api.credentials.js"
+			"dist/credentials/CopilotAgent.credentials.js"
 		],
 		"nodes": [
-			"dist/nodes/GithubIssues/GithubIssues.node.js",
-			"dist/nodes/Example/Example.node.js"
+			"dist/nodes/CopilotAgent/CopilotAgent.node.js"
 		]
+	},
+	"dependencies": {
+		"@github/copilot-sdk": "^0.2.2"
 	},
 	"devDependencies": {
 		"@n8n/node-cli": "*",
@@ -47,6 +56,7 @@
 		"typescript": "5.9.3"
 	},
 	"peerDependencies": {
+		"n8n-core": "*",
 		"n8n-workflow": "*"
 	}
 }
