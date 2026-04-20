@@ -8,7 +8,7 @@ if (isCopilotDebugEnabled) {
 	globalThis.console?.error('[copilot-agent][debug] CopilotAgent.credentials.ts loaded');
 }
 
-export class CopilotAgent implements ICredentialType {
+export class CopilotAgentApi implements ICredentialType {
 	name = 'copilotAgentApi';
 	displayName = 'GitHub Copilot API';
 	documentationUrl = 'https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens';

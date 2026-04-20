@@ -69,14 +69,14 @@ export class CopilotAgent implements INodeType {
 		],
 		properties: [
 			{
-				displayName: 'Model',
+				displayName: 'Model Name or ID',
 				name: 'model',
 				type: 'options',
 				typeOptions: {
 					loadOptionsMethod: 'getModelOptions',
 				},
 				default: 'gpt-5',
-				description: 'AI model to use for the session',
+				description: 'AI model to use for the session. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
 			},
 			{
 				displayName: 'Prompt',
@@ -87,7 +87,15 @@ export class CopilotAgent implements INodeType {
 				required: true,
 				description: 'Message to send to Copilot',
 			},
+			{
+				displayName: 'Share Session Across Items',
+				name: 'shareSession',
+				type: 'boolean',
+				default: false,
+				description: 'Whether to share a single session across all items. When disabled (default), each item gets its own isolated session for predictable, independent results. When enabled, all items share one session and context carries forward across the batch.',
+			},
 		],
+		usableAsTool: true,
 	};
 
 	// Define methods for n8n to use
@@ -118,20 +126,67 @@ export class CopilotAgent implements INodeType {
 		}
 
 		const model = this.getNodeParameter('model', 0) as string;
+		const shareSession = this.getNodeParameter('shareSession', 0, false) as boolean;
 		const client = new CopilotClient({ githubToken });
 
 		try {
 			// Start the client (required by SDK)
 			await client.start();
 
-			// Create session with required permission handler (per Copilot SDK skill)
-			const session = await client.createSession({
-				model: model || 'gpt-5',
-				onPermissionRequest: approveAll,
-			});
+			if (shareSession) {
+				// SHARED SESSION MODE: All items share one session (context carries forward)
+				const session = await client.createSession({
+					model: model || 'gpt-5',
+					onPermissionRequest: approveAll,
+				});
 
-			try {
-				// Process all items using the same session (preserves context and history)
+				try {
+					// Process all items using the same session (preserves context and history)
+					for (let i = 0; i < items.length; i++) {
+						const prompt = this.getNodeParameter('prompt', i) as string;
+
+						if (!prompt || prompt.trim().length === 0) {
+							returnData.push({
+								json: {
+									success: false,
+									error: 'Prompt cannot be empty',
+									node: 'copilotAgent',
+								},
+								pairedItem: { item: i },
+							});
+							continue;
+						}
+
+						try {
+							// Send prompt and wait for response (SDK request/response pattern)
+							const result = await session.sendAndWait({ prompt });
+
+							returnData.push({
+								json: {
+									success: true,
+									sessionId: session.sessionId,
+									response: result?.data?.content ?? '',
+									node: 'copilotAgent',
+								},
+								pairedItem: { item: i },
+							});
+						} catch (itemError) {
+							returnData.push({
+								json: {
+									success: false,
+									error: `Failed to process item ${i}: ${(itemError as Error).message}`,
+									node: 'copilotAgent',
+								},
+								pairedItem: { item: i },
+							});
+						}
+					}
+				} finally {
+					// Cleanup session (required by SDK)
+					await session.disconnect();
+				}
+			} else {
+				// ISOLATED SESSION MODE: Each item gets its own session (default, recommended)
 				for (let i = 0; i < items.length; i++) {
 					const prompt = this.getNodeParameter('prompt', i) as string;
 
@@ -147,8 +202,15 @@ export class CopilotAgent implements INodeType {
 						continue;
 					}
 
+					// Create a new session for this item
+					let session;
 					try {
-						// Send prompt and wait for response (SDK request/response pattern)
+						session = await client.createSession({
+							model: model || 'gpt-5',
+							onPermissionRequest: approveAll,
+						});
+
+						// Send prompt and wait for response
 						const result = await session.sendAndWait({ prompt });
 
 						returnData.push({
@@ -169,11 +231,13 @@ export class CopilotAgent implements INodeType {
 							},
 							pairedItem: { item: i },
 						});
+					} finally {
+						// Cleanup session for this item (required by SDK)
+						if (session) {
+							await session.disconnect();
+						}
 					}
 				}
-			} finally {
-				// Cleanup session (required by SDK)
-				await session.disconnect();
 			}
 		} finally {
 			// Cleanup client (required by SDK)
