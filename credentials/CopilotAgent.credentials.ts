@@ -38,21 +38,6 @@ export class CopilotAgent implements ICredentialType {
 					value: 'server_token',
 					description: 'Connect to CLI server with its own environment-provided token. No credentials needed.',
 				},
-				{
-					name: 'BYOK — OpenAI',
-					value: 'byok_openai',
-					description: 'Use your own OpenAI API key instead of GitHub Copilot.',
-				},
-				{
-					name: 'BYOK — Azure OpenAI',
-					value: 'byok_azure_openai',
-					description: 'Use your own Azure OpenAI service instead of GitHub Copilot.',
-				},
-				{
-					name: 'BYOK — Anthropic',
-					value: 'byok_anthropic',
-					description: 'Use your own Anthropic API key instead of GitHub Copilot.',
-				},
 			],
 		},
 		{
@@ -66,61 +51,6 @@ export class CopilotAgent implements ICredentialType {
 			displayOptions: {
 				show: {
 					authMode: ['github_token'],
-				},
-			},
-		},
-		{
-			displayName: 'OpenAI API Key',
-			name: 'openaiApiKey',
-			type: 'string',
-			typeOptions: { password: true },
-			default: '',
-			required: true,
-			description: 'Your OpenAI API key. Get one at https://platform.openai.com/account/api-keys',
-			displayOptions: {
-				show: {
-					authMode: ['byok_openai'],
-				},
-			},
-		},
-		{
-			displayName: 'Azure OpenAI API Key',
-			name: 'azureOpenaiApiKey',
-			type: 'string',
-			typeOptions: { password: true },
-			default: '',
-			required: true,
-			description: 'Your Azure OpenAI API key',
-			displayOptions: {
-				show: {
-					authMode: ['byok_azure_openai'],
-				},
-			},
-		},
-		{
-			displayName: 'Azure OpenAI Endpoint',
-			name: 'azureOpenaiEndpoint',
-			type: 'string',
-			default: '',
-			required: true,
-			description: 'Your Azure OpenAI service endpoint (e.g., "https://my-resource.openai.azure.com")',
-			displayOptions: {
-				show: {
-					authMode: ['byok_azure_openai'],
-				},
-			},
-		},
-		{
-			displayName: 'Anthropic API Key',
-			name: 'anthropicApiKey',
-			type: 'string',
-			typeOptions: { password: true },
-			default: '',
-			required: true,
-			description: 'Your Anthropic API key. Get one at https://console.anthropic.com',
-			displayOptions: {
-				show: {
-					authMode: ['byok_anthropic'],
 				},
 			},
 		},

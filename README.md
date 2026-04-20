@@ -5,7 +5,6 @@ A custom n8n node that integrates GitHub Copilot and other LLMs into your n8n wo
 ## Features
 
 - **GitHub Copilot** - Use GitHub Copilot models directly in your workflows
-- **Bring Your Own Key (BYOK)** - Use OpenAI, Azure OpenAI, or Anthropic API keys instead
 - **Local or Remote CLI** - Spawn CLI locally or connect to a remote CLI server
 - **Session Context** - Maintains conversation history across multiple prompts
 - **Multiple Models** - Support for GPT-5, Claude Sonnet 4.5, GPT-4.1, and more
@@ -37,7 +36,7 @@ npm run build
 
 ## Authentication
 
-The node supports four authentication modes. Choose the one that fits your deployment:
+The node supports two authentication modes. Choose the one that fits your deployment:
 
 ### 1. GitHub Token (Per-User)
 
@@ -87,73 +86,6 @@ Connect to a remote or local CLI server that already has an API token in its env
 - Requires external CLI server
 - No per-user billing/attribution
 - Network must be secure (see [Network Security](#network-security) below)
-
-### 3. BYOK — OpenAI
-
-**Best for:** Organizations using their own OpenAI subscription
-
-Use your own OpenAI API key instead of GitHub Copilot.
-
-**Setup:**
-1. Get your API key from https://platform.openai.com/account/api-keys
-2. In the credential, select **Authentication Mode** → "BYOK — OpenAI"
-3. Enter your OpenAI API key in the "OpenAI API Key" field
-4. No CLI URL or GitHub token needed
-5. (Optional) If using a remote CLI server configured for OpenAI, set "CLI Server URL"
-
-**Pros:**
-- No GitHub Copilot subscription required
-- Direct access to OpenAI models
-- Full control over billing
-
-**Cons:**
-- Requires OpenAI subscription
-- OpenAI API key stored in n8n (requires secure credential storage)
-
-### 4. BYOK — Azure OpenAI
-
-**Best for:** Enterprise environments with Azure
-
-Use your Azure OpenAI service instead of GitHub Copilot.
-
-**Setup:**
-1. Set up an Azure OpenAI resource in your Azure account
-2. Get your API key and endpoint from Azure Portal
-3. In the credential, select **Authentication Mode** → "BYOK — Azure OpenAI"
-4. Enter your API key in "Azure OpenAI API Key"
-5. Enter your endpoint (e.g., `https://my-resource.openai.azure.com`) in "Azure OpenAI Endpoint"
-6. (Optional) If using a remote CLI server, set "CLI Server URL"
-
-**Pros:**
-- Enterprise-grade security and compliance
-- Works within Azure VNets
-- No GitHub Copilot subscription required
-
-**Cons:**
-- Requires Azure account setup
-- Credentials stored in n8n
-- More complex infrastructure
-
-### 5. BYOK — Anthropic
-
-**Best for:** Organizations using Claude / Anthropic API
-
-Use Anthropic's Claude models via the Anthropic API.
-
-**Setup:**
-1. Get your API key from https://console.anthropic.com
-2. In the credential, select **Authentication Mode** → "BYOK — Anthropic"
-3. Enter your Anthropic API key in the "Anthropic API Key" field
-4. No CLI URL or GitHub token needed
-
-**Pros:**
-- Direct access to Claude models
-- No GitHub Copilot subscription required
-- Full control over billing
-
-**Cons:**
-- Requires Anthropic subscription
-- Anthropic API key stored in n8n
 
 ## Local vs. Remote CLI
 
@@ -233,25 +165,6 @@ Then set **CLI Server URL** to `copilot-server:8080` (or your server's address).
 }
 ```
 
-### Example 3: OpenAI via Local CLI
-```json
-{
-  "authMode": "byok_openai",
-  "openaiApiKey": "sk-xxxxxxxxxxxx",
-  "cliUrl": ""
-}
-```
-
-### Example 4: Azure OpenAI via Remote Server
-```json
-{
-  "authMode": "byok_azure_openai",
-  "azureOpenaiApiKey": "xxxxxxxxxxxx",
-  "azureOpenaiEndpoint": "https://my-resource.openai.azure.com",
-  "cliUrl": "azure-copilot:8080"
-}
-```
-
 ## Node Usage
 
 ### Inputs
@@ -304,10 +217,6 @@ npm run lint:fix
 - Check network connectivity: `telnet host port`
 - Ensure the CLI server is running
 
-### "Anthropic API key is required"
-- You've selected "BYOK — Anthropic" but didn't provide an API key
-- Get a key from https://console.anthropic.com
-
 ### Session or model errors
 - Check that the selected model is available for your authentication method
 - Review the node execution logs for detailed error messages
@@ -316,9 +225,6 @@ npm run lint:fix
 
 - [GitHub Copilot SDK Documentation](https://github.com/github/copilot-sdk)
 - [n8n Node Development Guide](https://docs.n8n.io/integrations/creating-nodes/)
-- [OpenAI API Documentation](https://platform.openai.com/docs)
-- [Azure OpenAI Service Documentation](https://learn.microsoft.com/en-us/azure/cognitive-services/openai/)
-- [Anthropic API Documentation](https://docs.anthropic.com)
 
 ## License
 

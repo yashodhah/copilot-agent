@@ -11,20 +11,12 @@ import { CopilotClient, approveAll } from '@github/copilot-sdk';
 interface CopilotClientConfig {
 	serverUrl?: string;
 	githubToken?: string;
-	openaiApiKey?: string;
-	azureOpenaiApiKey?: string;
-	azureOpenaiEndpoint?: string;
-	anthropicApiKey?: string;
 }
 
 interface CredentialsWithAuth {
 	cliUrl?: string;
 	authMode?: string;
 	githubToken?: string;
-	openaiApiKey?: string;
-	azureOpenaiApiKey?: string;
-	azureOpenaiEndpoint?: string;
-	anthropicApiKey?: string;
 }
 
 function buildCopilotClientConfig(credentials: CredentialsWithAuth): CopilotClientConfig {
@@ -39,9 +31,7 @@ function buildCopilotClientConfig(credentials: CredentialsWithAuth): CopilotClie
 	switch (authMode) {
 		case 'github_token': {
 			if (!credentials.githubToken) {
-				const error = new Error('GitHub token is required for GitHub Token auth mode');
-				error.name = 'NodeOperationError';
-				throw error;
+				throw new Error('GitHub token is required for GitHub Token auth mode');
 			}
 			config.githubToken = credentials.githubToken;
 			break;
@@ -49,43 +39,8 @@ function buildCopilotClientConfig(credentials: CredentialsWithAuth): CopilotClie
 		case 'server_token':
 			// No credentials needed - server's environment token is used
 			break;
-		case 'byok_openai': {
-			if (!credentials.openaiApiKey) {
-				const error = new Error('OpenAI API key is required for BYOK-OpenAI mode');
-				error.name = 'NodeOperationError';
-				throw error;
-			}
-			config.openaiApiKey = credentials.openaiApiKey;
-			break;
-		}
-		case 'byok_azure_openai': {
-			if (!credentials.azureOpenaiApiKey) {
-				const error = new Error('Azure OpenAI API key is required for BYOK-Azure mode');
-				error.name = 'NodeOperationError';
-				throw error;
-			}
-			if (!credentials.azureOpenaiEndpoint) {
-				const error = new Error('Azure OpenAI endpoint is required for BYOK-Azure mode');
-				error.name = 'NodeOperationError';
-				throw error;
-			}
-			config.azureOpenaiApiKey = credentials.azureOpenaiApiKey;
-			config.azureOpenaiEndpoint = credentials.azureOpenaiEndpoint;
-			break;
-		}
-		case 'byok_anthropic': {
-			if (!credentials.anthropicApiKey) {
-				const error = new Error('Anthropic API key is required for BYOK-Anthropic mode');
-				error.name = 'NodeOperationError';
-				throw error;
-			}
-			config.anthropicApiKey = credentials.anthropicApiKey;
-			break;
-		}
 		default: {
-			const error = new Error(`Unknown authentication mode: ${authMode}`);
-			error.name = 'NodeOperationError';
-			throw error;
+			throw new Error(`Unknown authentication mode: ${authMode}`);
 		}
 	}
 
