@@ -5,20 +5,54 @@ import type {
 	INodeType,
 	INodeTypeDescription,
 } from 'n8n-workflow';
-import { NodeConnectionTypes } from 'n8n-workflow';
+import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 import { CopilotClient, approveAll } from '@github/copilot-sdk';
+
+interface CopilotClientConfig {
+	serverUrl?: string;
+	githubToken?: string;
+}
+
+interface CredentialsWithAuth {
+	cliUrl?: string;
+	authMode?: string;
+	githubToken?: string;
+}
+
+function buildCopilotClientConfig(credentials: CredentialsWithAuth): CopilotClientConfig {
+	const config: CopilotClientConfig = {};
+
+	if (credentials.cliUrl) {
+		config.serverUrl = credentials.cliUrl;
+	}
+
+	const authMode = credentials.authMode || 'github_token';
+
+	switch (authMode) {
+		case 'github_token': {
+			if (!credentials.githubToken) {
+				throw new Error('GitHub token is required for GitHub Token auth mode');
+			}
+			config.githubToken = credentials.githubToken;
+			break;
+		}
+		case 'server_token':
+			// No credentials needed - server's environment token is used
+			break;
+		default: {
+			throw new Error(`Unknown authentication mode: ${authMode}`);
+		}
+	}
+
+	return config;
+}
 
 // Standalone implementation for model options (called by the node method)
 async function getModelOptionsImpl(this: ILoadOptionsFunctions) {
 	try {
 		const credentials = await this.getCredentials('copilotAgentApi');
-		const githubToken = credentials.githubToken as string;
-
-		if (!githubToken) {
-			throw new Error('GitHub token not found in credentials');
-		}
-
-		const client = new CopilotClient({ githubToken });
+		const config = buildCopilotClientConfig(credentials as CredentialsWithAuth);
+		const client = new CopilotClient(config);
 
 		try {
 			await client.start();
@@ -46,6 +80,79 @@ async function getModelOptionsImpl(this: ILoadOptionsFunctions) {
 		{ name: 'Claude Sonnet 4.5', value: 'claude-sonnet-4.5' },
 		{ name: 'GPT-4.1', value: 'gpt-4.1' },
 	];
+}
+
+async function executeSharedSession(
+	context: IExecuteFunctions,
+	client: CopilotClient,
+	items: INodeExecutionData[],
+	model: string,
+): Promise<INodeExecutionData[]> {
+	const returnData: INodeExecutionData[] = [];
+
+	const session = await client.createSession({
+		model: model || 'gpt-5',
+		onPermissionRequest: approveAll,
+	});
+
+	try {
+		for (let i = 0; i < items.length; i++) {
+			const prompt = context.getNodeParameter('prompt', i) as string;
+
+			if (!prompt || prompt.trim().length === 0) {
+				returnData.push({ json: { success: false, error: 'Prompt cannot be empty', node: 'copilotAgent' }, pairedItem: { item: i } });
+				continue;
+			}
+
+			try {
+				const result = await session.sendAndWait({ prompt });
+				returnData.push({ json: { success: true, sessionId: session.sessionId, response: result?.data?.content ?? '', node: 'copilotAgent' }, pairedItem: { item: i } });
+			} catch (itemError) {
+				returnData.push({ json: { success: false, error: `Failed to process item ${i}: ${(itemError as Error).message}`, node: 'copilotAgent' }, pairedItem: { item: i } });
+			}
+		}
+	} finally {
+		await session.disconnect();
+	}
+
+	return returnData;
+}
+
+async function executeIsolatedSession(
+	context: IExecuteFunctions,
+	client: CopilotClient,
+	items: INodeExecutionData[],
+	model: string,
+): Promise<INodeExecutionData[]> {
+	const returnData: INodeExecutionData[] = [];
+
+	for (let i = 0; i < items.length; i++) {
+		const prompt = context.getNodeParameter('prompt', i) as string;
+
+		if (!prompt || prompt.trim().length === 0) {
+			returnData.push({ json: { success: false, error: 'Prompt cannot be empty', node: 'copilotAgent' }, pairedItem: { item: i } });
+			continue;
+		}
+
+		let session;
+		try {
+			session = await client.createSession({
+				model: model || 'gpt-5',
+				onPermissionRequest: approveAll,
+			});
+
+			const result = await session.sendAndWait({ prompt });
+			returnData.push({ json: { success: true, sessionId: session.sessionId, response: result?.data?.content ?? '', node: 'copilotAgent' }, pairedItem: { item: i } });
+		} catch (itemError) {
+			returnData.push({ json: { success: false, error: `Failed to process item ${i}: ${(itemError as Error).message}`, node: 'copilotAgent' }, pairedItem: { item: i } });
+		} finally {
+			if (session) {
+				await session.disconnect();
+			}
+		}
+	}
+
+	return returnData;
 }
 
 export class CopilotAgent implements INodeType {
@@ -109,141 +216,31 @@ export class CopilotAgent implements INodeType {
 
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
 		const items = this.getInputData();
-		const returnData: INodeExecutionData[] = [];
 
 		let credentials;
-		let githubToken: string;
+		let config: CopilotClientConfig;
 
 		try {
 			credentials = await this.getCredentials('copilotAgentApi');
-			githubToken = credentials.githubToken as string;
-
-			if (!githubToken) {
-				throw new Error('GitHub token is not provided in credentials');
-			}
+			config = buildCopilotClientConfig(credentials as CredentialsWithAuth);
 		} catch (error) {
-			throw new Error(`Failed to retrieve credentials: ${(error as Error).message}`);
+			throw new NodeOperationError(this.getNode(), `Failed to retrieve credentials: ${(error as Error).message}`);
 		}
 
 		const model = this.getNodeParameter('model', 0) as string;
 		const shareSession = this.getNodeParameter('shareSession', 0, false) as boolean;
-		const client = new CopilotClient({ githubToken });
+		const client = new CopilotClient(config);
 
 		try {
-			// Start the client (required by SDK)
 			await client.start();
 
-			if (shareSession) {
-				// SHARED SESSION MODE: All items share one session (context carries forward)
-				const session = await client.createSession({
-					model: model || 'gpt-5',
-					onPermissionRequest: approveAll,
-				});
+			const returnData = shareSession
+				? await executeSharedSession(this, client, items, model)
+				: await executeIsolatedSession(this, client, items, model);
 
-				try {
-					// Process all items using the same session (preserves context and history)
-					for (let i = 0; i < items.length; i++) {
-						const prompt = this.getNodeParameter('prompt', i) as string;
-
-						if (!prompt || prompt.trim().length === 0) {
-							returnData.push({
-								json: {
-									success: false,
-									error: 'Prompt cannot be empty',
-									node: 'copilotAgent',
-								},
-								pairedItem: { item: i },
-							});
-							continue;
-						}
-
-						try {
-							// Send prompt and wait for response (SDK request/response pattern)
-							const result = await session.sendAndWait({ prompt });
-
-							returnData.push({
-								json: {
-									success: true,
-									sessionId: session.sessionId,
-									response: result?.data?.content ?? '',
-									node: 'copilotAgent',
-								},
-								pairedItem: { item: i },
-							});
-						} catch (itemError) {
-							returnData.push({
-								json: {
-									success: false,
-									error: `Failed to process item ${i}: ${(itemError as Error).message}`,
-									node: 'copilotAgent',
-								},
-								pairedItem: { item: i },
-							});
-						}
-					}
-				} finally {
-					// Cleanup session (required by SDK)
-					await session.disconnect();
-				}
-			} else {
-				// ISOLATED SESSION MODE: Each item gets its own session (default, recommended)
-				for (let i = 0; i < items.length; i++) {
-					const prompt = this.getNodeParameter('prompt', i) as string;
-
-					if (!prompt || prompt.trim().length === 0) {
-						returnData.push({
-							json: {
-								success: false,
-								error: 'Prompt cannot be empty',
-								node: 'copilotAgent',
-							},
-							pairedItem: { item: i },
-						});
-						continue;
-					}
-
-					// Create a new session for this item
-					let session;
-					try {
-						session = await client.createSession({
-							model: model || 'gpt-5',
-							onPermissionRequest: approveAll,
-						});
-
-						// Send prompt and wait for response
-						const result = await session.sendAndWait({ prompt });
-
-						returnData.push({
-							json: {
-								success: true,
-								sessionId: session.sessionId,
-								response: result?.data?.content ?? '',
-								node: 'copilotAgent',
-							},
-							pairedItem: { item: i },
-						});
-					} catch (itemError) {
-						returnData.push({
-							json: {
-								success: false,
-								error: `Failed to process item ${i}: ${(itemError as Error).message}`,
-								node: 'copilotAgent',
-							},
-							pairedItem: { item: i },
-						});
-					} finally {
-						// Cleanup session for this item (required by SDK)
-						if (session) {
-							await session.disconnect();
-						}
-					}
-				}
-			}
+			return [returnData];
 		} finally {
-			// Cleanup client (required by SDK)
 			await client.stop();
 		}
-
-		return [returnData];
 	}
 }
