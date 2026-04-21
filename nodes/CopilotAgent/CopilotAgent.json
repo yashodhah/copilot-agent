@@ -2,11 +2,11 @@
 	"node": "n8n-nodes-copilot-agent.copilotAgent",
 	"nodeVersion": "1.0",
 	"codexVersion": "1.0",
-	"categories": ["Development"],
+	"categories": ["Development", "AI"],
 	"resources": {
 		"primaryDocumentation": [
 			{
-				"url": "https://docs.n8n.io/integrations/creating-nodes/"
+				"url": "https://github.com/yashodhah/copilot-agent#readme"
 			}
 		]
 	}

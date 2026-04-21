@@ -1,17 +1,22 @@
 # n8n-nodes-copilot-agent
 
+[![npm version](https://img.shields.io/npm/v/n8n-nodes-copilot-agent)](https://www.npmjs.com/package/n8n-nodes-copilot-agent)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE.md)
+[![CI](https://github.com/yashodhah/copilot-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/yashodhah/copilot-agent/actions/workflows/ci.yml)
+
 A custom n8n node that integrates GitHub Copilot and other LLMs into your n8n workflows using the [GitHub Copilot SDK](https://github.com/github/copilot-sdk).
 
 ## Features
 
 - **GitHub Copilot** - Use GitHub Copilot models directly in your workflows
 - **Local or Remote CLI** - Spawn CLI locally or connect to a remote CLI server
-- **Session Context** - Maintains conversation history across multiple prompts
+- **Session Isolation** - Each item gets its own independent session by default; optionally share context across a batch
 - **Multiple Models** - Support for GPT-5, Claude Sonnet 4.5, GPT-4.1, and more
+- **AI Tool Compatible** - Use as a tool within n8n Agent nodes
 
 ## Installation
 
-Install the node via npm:
+Install the node via npm in your n8n instance:
 
 ```bash
 npm install n8n-nodes-copilot-agent
@@ -20,8 +25,8 @@ npm install n8n-nodes-copilot-agent
 Or clone and build from source:
 
 ```bash
-git clone https://github.com/yourusername/n8n-nodes-copilot-agent.git
-cd n8n-nodes-copilot-agent
+git clone https://github.com/yashodhah/copilot-agent.git
+cd copilot-agent
 npm install
 npm run build
 ```
@@ -29,7 +34,7 @@ npm run build
 ## Quick Start
 
 1. Create a new workflow in n8n
-2. Add the "Copilot Agent" node
+2. Add the **Copilot Agent** node
 3. Configure credentials (see [Authentication](#authentication) below)
 4. Set the model and enter your prompt
 5. Execute the workflow
@@ -51,6 +56,9 @@ The most straightforward option. Each user provides their own GitHub Personal Ac
 4. Paste your token in the "GitHub Personal Access Token" field
 5. Leave "CLI Server URL" empty to spawn CLI locally (default)
 
+**Required token scopes:**
+- `copilot` — access Copilot chat completions
+
 **Pros:**
 - No server setup required
 - Per-user billing and attribution
@@ -64,7 +72,7 @@ The most straightforward option. Each user provides their own GitHub Personal Ac
 
 **Best for:** Self-hosted n8n, shared deployments, service accounts
 
-Connect to a remote or local CLI server that already has an API token in its environment variable. No credentials are passed—the server's token is used automatically.
+Connect to a remote or local CLI server that already has an API token in its environment. No credentials are passed—the server's token is used automatically.
 
 **Setup:**
 1. Start a Copilot CLI server with a token in the environment:
@@ -170,21 +178,26 @@ Then set **CLI Server URL** to `copilot-server:8080` (or your server's address).
 ### Inputs
 - **Model**: Select the AI model to use (GPT-5, Claude Sonnet 4.5, GPT-4.1, etc.)
 - **Prompt**: The message to send to the selected model
+- **Share Session Across Items**: Toggle session isolation behaviour (see below)
 
 ### Outputs
 - **success**: Boolean indicating if the request succeeded
 - **response**: The model's response text
 - **sessionId**: The session ID (useful for debugging or session tracking)
-- **error**: Error message if the request failed
+- **error**: Error message if the request failed (empty string on success)
 
-### Session Context
+### Session Isolation
 
-The node maintains a single session across all input items in a batch. This means:
-- First item: Starts a new conversation
-- Subsequent items: Same conversation context (history is preserved)
-- Last item: Session is automatically cleaned up
+The **Share Session Across Items** toggle controls how sessions are managed across a batch of input items:
 
-This is useful for multi-turn conversations within a single workflow run.
+| Setting | Behaviour | Best for |
+|---------|-----------|----------|
+| **Off** (default) | Each item gets its own independent session | Parallel/independent tasks, predictable results |
+| **On** | All items share one session in sequence | Multi-turn conversations, context-aware chains |
+
+**Isolated sessions (default):** Every input item starts a fresh conversation. Use this when items are independent and you want reproducible, isolated results.
+
+**Shared session:** All items in the batch are sent to the same session in order. The model sees the full conversation history as context builds up. Use this for multi-turn workflows (e.g., summarize → critique → rewrite).
 
 ## Development
 
@@ -206,26 +219,55 @@ npm run lint
 npm run lint:fix
 ```
 
+### Release
+```bash
+npm run release
+```
+
+This runs lint, build, prompts for a version bump, updates the changelog, commits, tags, and pushes — which triggers the publish workflow to publish to npm.
+
 ## Troubleshooting
 
-### "GitHub token is not provided"
+### "GitHub token is required for GitHub Token auth mode"
 - Check that you've selected "GitHub Token (Per-User)" auth mode and provided a token
-- Verify the token has `copilot` scope
+- Verify the token has `copilot` scope at https://github.com/settings/tokens
+
+### "Failed to retrieve credentials"
+- Ensure the credential is saved and attached to the node
+- Re-enter the credential in n8n if it was migrated from another instance
 
 ### "Failed to connect to CLI server"
-- Verify the CLI Server URL is correct
-- Check network connectivity: `telnet host port`
-- Ensure the CLI server is running
+- Verify the CLI Server URL is correct (format: `host:port`, no `http://`)
+- Check network connectivity: `telnet <host> <port>`
+- Ensure the CLI server is running with a valid `GITHUB_TOKEN`
 
 ### Session or model errors
-- Check that the selected model is available for your authentication method
-- Review the node execution logs for detailed error messages
+- Check that the selected model is available for your GitHub Copilot subscription tier
+- Review the node execution logs for detailed error messages from the SDK
+
+### Empty response
+- Ensure your prompt is not empty — the node returns an error item for empty prompts
+- Try a simpler prompt to rule out model-side issues
+
+## Contributing
+
+Contributions are welcome! To contribute:
+
+1. Fork the repository at https://github.com/yashodhah/copilot-agent
+2. Create a feature branch: `git checkout -b feature/my-feature`
+3. Make your changes and ensure `npm run lint && npm run build` pass
+4. Commit with a descriptive message
+5. Open a pull request against `main`
+
+Please follow the existing code style (TypeScript strict mode, tabs, single quotes) and keep changes focused.
 
 ## References
 
 - [GitHub Copilot SDK Documentation](https://github.com/github/copilot-sdk)
 - [n8n Node Development Guide](https://docs.n8n.io/integrations/creating-nodes/)
+- [n8n Community Node Deployment](https://docs.n8n.io/integrations/creating-nodes/deploy/)
+- [GitHub Personal Access Tokens](https://github.com/settings/tokens)
 
 ## License
 
-[MIT](LICENSE.md)
+[MIT](LICENSE.md) © 2026 yashodhah

@@ -1,11 +1,14 @@
 import type {
+	ICredentialTestFunctions,
+	ICredentialsDecrypted,
 	IExecuteFunctions,
 	ILoadOptionsFunctions,
+	INodeCredentialTestResult,
 	INodeExecutionData,
 	INodeType,
 	INodeTypeDescription,
 } from 'n8n-workflow';
-import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
+import { ApplicationError, NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 import { CopilotClient, approveAll } from '@github/copilot-sdk';
 
 interface CopilotClientConfig {
@@ -19,6 +22,15 @@ interface CredentialsWithAuth {
 	githubToken?: string;
 }
 
+interface CopilotModel {
+	id: string;
+	name?: string;
+}
+
+interface CopilotClientExtended {
+	listModels?: () => Promise<CopilotModel[]>;
+}
+
 function buildCopilotClientConfig(credentials: CredentialsWithAuth): CopilotClientConfig {
 	const config: CopilotClientConfig = {};
 
@@ -26,28 +38,26 @@ function buildCopilotClientConfig(credentials: CredentialsWithAuth): CopilotClie
 		config.serverUrl = credentials.cliUrl;
 	}
 
-	const authMode = credentials.authMode || 'github_token';
+	const authMode = credentials.authMode ?? 'github_token';
 
 	switch (authMode) {
 		case 'github_token': {
 			if (!credentials.githubToken) {
-				throw new Error('GitHub token is required for GitHub Token auth mode');
+				throw new ApplicationError('GitHub token is required for GitHub Token auth mode');
 			}
 			config.githubToken = credentials.githubToken;
 			break;
 		}
 		case 'server_token':
-			// No credentials needed - server's environment token is used
 			break;
 		default: {
-			throw new Error(`Unknown authentication mode: ${authMode}`);
+			throw new ApplicationError(`Unknown authentication mode: ${authMode}`);
 		}
 	}
 
 	return config;
 }
 
-// Standalone implementation for model options (called by the node method)
 async function getModelOptionsImpl(this: ILoadOptionsFunctions) {
 	try {
 		const credentials = await this.getCredentials('copilotAgentApi');
@@ -56,25 +66,21 @@ async function getModelOptionsImpl(this: ILoadOptionsFunctions) {
 
 		try {
 			await client.start();
-
-			// Attempt to fetch available models from SDK
-			const models = await (client as any).listModels?.();
+			const models = await (client as unknown as CopilotClientExtended).listModels?.();
 
 			if (Array.isArray(models) && models.length > 0) {
-				return models.map((model: any) => ({
-					name: model.name || model.id,
+				return models.map((model) => ({
+					name: model.name ?? model.id,
 					value: model.id,
 				}));
 			}
 		} finally {
 			await client.stop();
 		}
-	} catch (error) {
-		// Log warning but continue with fallback
-		console.warn('Failed to fetch models from SDK, using fallback list:', error);
+	} catch {
+		// Fall through to static list when SDK is unavailable during credential setup
 	}
 
-	// Static fallback list (matches SDK v0.2.2 supported models)
 	return [
 		{ name: 'GPT-5', value: 'gpt-5' },
 		{ name: 'Claude Sonnet 4.5', value: 'claude-sonnet-4.5' },
@@ -100,15 +106,33 @@ async function executeSharedSession(
 			const prompt = context.getNodeParameter('prompt', i) as string;
 
 			if (!prompt || prompt.trim().length === 0) {
-				returnData.push({ json: { success: false, error: 'Prompt cannot be empty', node: 'copilotAgent' }, pairedItem: { item: i } });
+				returnData.push({
+					json: { success: false, error: 'Prompt cannot be empty', node: 'copilotAgent' },
+					pairedItem: { item: i },
+				});
 				continue;
 			}
 
 			try {
 				const result = await session.sendAndWait({ prompt });
-				returnData.push({ json: { success: true, sessionId: session.sessionId, response: result?.data?.content ?? '', node: 'copilotAgent' }, pairedItem: { item: i } });
+				returnData.push({
+					json: {
+						success: true,
+						sessionId: session.sessionId,
+						response: result?.data?.content ?? '',
+						node: 'copilotAgent',
+					},
+					pairedItem: { item: i },
+				});
 			} catch (itemError) {
-				returnData.push({ json: { success: false, error: `Failed to process item ${i}: ${(itemError as Error).message}`, node: 'copilotAgent' }, pairedItem: { item: i } });
+				returnData.push({
+					json: {
+						success: false,
+						error: `Failed to process item ${i}: ${(itemError as Error).message}`,
+						node: 'copilotAgent',
+					},
+					pairedItem: { item: i },
+				});
 			}
 		}
 	} finally {
@@ -130,7 +154,10 @@ async function executeIsolatedSession(
 		const prompt = context.getNodeParameter('prompt', i) as string;
 
 		if (!prompt || prompt.trim().length === 0) {
-			returnData.push({ json: { success: false, error: 'Prompt cannot be empty', node: 'copilotAgent' }, pairedItem: { item: i } });
+			returnData.push({
+				json: { success: false, error: 'Prompt cannot be empty', node: 'copilotAgent' },
+				pairedItem: { item: i },
+			});
 			continue;
 		}
 
@@ -142,9 +169,24 @@ async function executeIsolatedSession(
 			});
 
 			const result = await session.sendAndWait({ prompt });
-			returnData.push({ json: { success: true, sessionId: session.sessionId, response: result?.data?.content ?? '', node: 'copilotAgent' }, pairedItem: { item: i } });
+			returnData.push({
+				json: {
+					success: true,
+					sessionId: session.sessionId,
+					response: result?.data?.content ?? '',
+					node: 'copilotAgent',
+				},
+				pairedItem: { item: i },
+			});
 		} catch (itemError) {
-			returnData.push({ json: { success: false, error: `Failed to process item ${i}: ${(itemError as Error).message}`, node: 'copilotAgent' }, pairedItem: { item: i } });
+			returnData.push({
+				json: {
+					success: false,
+					error: `Failed to process item ${i}: ${(itemError as Error).message}`,
+					node: 'copilotAgent',
+				},
+				pairedItem: { item: i },
+			});
 		} finally {
 			if (session) {
 				await session.disconnect();
@@ -159,7 +201,7 @@ export class CopilotAgent implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'Copilot Agent',
 		name: 'copilotAgent',
-		icon: 'file:copilotAgent.svg',
+		icon: 'file:CopilotAgent.svg',
 		group: ['transform'],
 		version: 1,
 		description: 'Copilot agent node using GitHub Copilot SDK',
@@ -172,6 +214,7 @@ export class CopilotAgent implements INodeType {
 			{
 				name: 'copilotAgentApi',
 				required: true,
+				testedBy: 'testCopilotApiCredentials',
 			},
 		],
 		properties: [
@@ -183,7 +226,8 @@ export class CopilotAgent implements INodeType {
 					loadOptionsMethod: 'getModelOptions',
 				},
 				default: 'gpt-5',
-				description: 'AI model to use for the session. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
+				description:
+					'AI model to use for the session. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
 			},
 			{
 				displayName: 'Prompt',
@@ -199,17 +243,30 @@ export class CopilotAgent implements INodeType {
 				name: 'shareSession',
 				type: 'boolean',
 				default: false,
-				description: 'Whether to share a single session across all items. When disabled (default), each item gets its own isolated session for predictable, independent results. When enabled, all items share one session and context carries forward across the batch.',
+				description:
+					'Whether to share a single session across all items. When disabled (default), each item gets its own isolated session for predictable, independent results. When enabled, all items share one session and context carries forward across the batch.',
 			},
 		],
 		usableAsTool: true,
 	};
 
-	// Define methods for n8n to use
 	methods = {
 		loadOptions: {
 			async getModelOptions(this: ILoadOptionsFunctions) {
 				return await getModelOptionsImpl.call(this);
+			},
+		},
+		credentialTest: {
+			async testCopilotApiCredentials(
+				this: ICredentialTestFunctions,
+				credential: ICredentialsDecrypted,
+			): Promise<INodeCredentialTestResult> {
+				try {
+					buildCopilotClientConfig(credential.data as CredentialsWithAuth);
+					return { status: 'OK', message: 'Credential configuration is valid' };
+				} catch (error) {
+					return { status: 'Error', message: (error as Error).message };
+				}
 			},
 		},
 	};
@@ -224,7 +281,10 @@ export class CopilotAgent implements INodeType {
 			credentials = await this.getCredentials('copilotAgentApi');
 			config = buildCopilotClientConfig(credentials as CredentialsWithAuth);
 		} catch (error) {
-			throw new NodeOperationError(this.getNode(), `Failed to retrieve credentials: ${(error as Error).message}`);
+			throw new NodeOperationError(
+				this.getNode(),
+				`Failed to retrieve credentials: ${(error as Error).message}`,
+			);
 		}
 
 		const model = this.getNodeParameter('model', 0) as string;
