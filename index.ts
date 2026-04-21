@@ -1,10 +1,2 @@
-const isCopilotDebugEnabled =
-	(globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.
-		COPILOT_AGENT_DEBUG === '1';
-
-if (isCopilotDebugEnabled) {
-	globalThis.console?.error('[copilot-agent][debug] index.ts loaded');
-}
-
-export { CopilotAgentApi as CopilotAgentCredentials } from './credentials/CopilotAgent.credentials';
+export { CopilotAgentApi as CopilotAgentCredentials } from './credentials/CopilotAgentApi.credentials';
 export { CopilotAgent } from './nodes/CopilotAgent/CopilotAgent.node';
