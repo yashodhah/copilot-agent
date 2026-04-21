@@ -261,11 +261,50 @@ export class CopilotAgent implements INodeType {
 				this: ICredentialTestFunctions,
 				credential: ICredentialsDecrypted,
 			): Promise<INodeCredentialTestResult> {
+				const credentials = credential.data as CredentialsWithAuth;
+				const isRemote = Boolean(credentials.cliUrl);
+
+				let config: CopilotClientConfig;
 				try {
-					buildCopilotClientConfig(credential.data as CredentialsWithAuth);
-					return { status: 'OK', message: 'Credential configuration is valid' };
+					config = buildCopilotClientConfig(credentials);
 				} catch (error) {
 					return { status: 'Error', message: (error as Error).message };
+				}
+
+				const client = new CopilotClient(config);
+				try {
+					await client.start();
+
+					const models = await (client as unknown as CopilotClientExtended).listModels?.();
+					const modelCount = Array.isArray(models) ? models.length : 0;
+					const modelInfo =
+						modelCount > 0 ? ` (${modelCount} model${modelCount === 1 ? '' : 's'} available)` : '';
+
+					if (isRemote) {
+						return {
+							status: 'OK',
+							message: `Connected to remote CLI server at ${credentials.cliUrl}${modelInfo}`,
+						};
+					} else {
+						return {
+							status: 'OK',
+							message: `Local CLI subprocess started successfully${modelInfo}`,
+						};
+					}
+				} catch (error) {
+					if (isRemote) {
+						return {
+							status: 'Error',
+							message: `Failed to connect to remote CLI server at ${credentials.cliUrl}: ${(error as Error).message}`,
+						};
+					} else {
+						return {
+							status: 'Error',
+							message: `Failed to start local CLI subprocess: ${(error as Error).message}`,
+						};
+					}
+				} finally {
+					await client.stop();
 				}
 			},
 		},
