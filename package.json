@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-copilot-agent",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "n8n community node for GitHub Copilot via the @github/copilot-sdk",
   "license": "MIT",
   "homepage": "https://github.com/yashodhah/copilot-agent#readme",
@@ -23,13 +23,12 @@
   "scripts": {
     "build": "n8n-node build",
     "build:watch": "tsc --watch",
-    "dev": "n8n-node dev --custom-user-folder $HOME/.n8n-node-cli-n8n-nodes-my-app",
-    "dev:external": "n8n-node dev --external-n8n --custom-user-folder $HOME/.n8n-node-cli-n8n-nodes-my-app",
+    "dev": "n8n-node dev",
+    "dev:external": "n8n-node dev --external-n8n",
     "lint": "n8n-node lint",
     "lint:fix": "n8n-node lint --fix",
     "predev": "node scripts/postinstall.js",
     "predev:external": "node scripts/postinstall.js",
-    "postinstall": "node scripts/postinstall.js",
     "release": "n8n-node release",
     "prepublishOnly": "n8n-node prerelease"
   },
@@ -49,5 +48,5 @@
     "release-it": "19.2.4",
     "typescript": "5.9.3"
   },
-  "peerDependencies": { "n8n-core": "*", "n8n-workflow": "*" }
+  "peerDependencies": { "n8n-workflow": "*" }
 }
