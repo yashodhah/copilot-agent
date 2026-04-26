@@ -1,4 +1,4 @@
-import { normalizeAuthMode, buildCopilotClientConfig } from '../config';
+import { normalizeAuthMode, buildCopilotClientConfig, type AuthMode } from '../config';
 
 describe('config', () => {
 	describe('normalizeAuthMode', () => {
@@ -15,7 +15,7 @@ describe('config', () => {
 		});
 
 		it('should throw for unknown auth mode', () => {
-			expect(() => normalizeAuthMode('invalid' as any)).toThrow();
+			expect(() => normalizeAuthMode('invalid' as unknown as AuthMode)).toThrow();
 		});
 	});
 
